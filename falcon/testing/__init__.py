@@ -75,6 +75,7 @@ The testing framework supports both unittest and pytest::
 """
 
 # Hoist classes and functions into the falcon.testing namespace
+
 from falcon import util as _util
 from falcon.testing.client import ASGIConductor
 from falcon.testing.client import Cookie
@@ -114,6 +115,7 @@ from falcon.testing.resource import SimpleTestResource
 from falcon.testing.resource import SimpleTestResourceAsync
 from falcon.testing.srmock import StartResponseMock
 from falcon.testing.test_case import TestCase
+from falcon.util.deprecation import deprecated
 
 __all__ = (
     # client
@@ -161,4 +163,6 @@ __all__ = (
 
 # NOTE(kgriffs): Alias for backwards-compatibility with Falcon 0.2
 # TODO(vytas): Remove in Falcon 5.0.
-httpnow = _util.http_now
+httpnow = deprecated('This method is deprecated and will be removed in Falcon 5.0.')(
+    _util.http_now
+)

@@ -120,12 +120,13 @@ class TestFalconUtils:
         assert msg in str(warn.message)
 
     def test_http_now(self):
-        expected = datetime.now(timezone.utc)
-        actual = falcon.http_date_to_dt(falcon.http_now())
+        with pytest.warns(deprecation.DeprecatedWarning):
+            expected = datetime.now(timezone.utc)
+            actual = falcon.http_date_to_dt(falcon.http_now())
 
-        delta = actual.replace(tzinfo=timezone.utc) - expected
+            delta = actual.replace(tzinfo=timezone.utc) - expected
 
-        assert delta.total_seconds() <= 1
+            assert delta.total_seconds() <= 1
 
     def test_dt_to_http(self):
         assert (
@@ -713,7 +714,7 @@ class TestFalconTestingUtils:
         assert response.json == falcon.HTTPNotFound().to_dict()
 
     def test_httpnow_alias_for_backwards_compat(self):
-        assert testing.httpnow is falcon.util.http_now
+            assert testing.httpnow is falcon.util.http_now
 
     def test_default_headers(self, app):
         resource = testing.SimpleTestResource()
