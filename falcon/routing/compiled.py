@@ -307,6 +307,95 @@ class CompiledRouter:
 
     # NOTE(caselit): keep Request as string otherwise sphinx complains that it resolves
     # to multiple classes, since the symbol is imported only for type check.
+
+def remove_route(  # noqa: C901
+        self, uri_template: str, resource: object, **kwargs: Any
+    ) -> None:
+        """Removes a route between a URI path template and a resource.
+
+        Args:
+            uri_template (str): A URI template to identify the route to be deleted.
+
+        Keyword Args:
+            suffix (str): Optional responder name suffix for this route. If
+                a suffix is provided, Falcon will map GET requests to
+                ``on_get_{suffix}()``, POST requests to ``on_post_{suffix}()``,
+                etc. In this way, multiple closely-related routes can be
+                mapped to the same resource. For example, a single resource
+                class can use suffixed responders to distinguish requests
+                for a single item vs. a collection of those same items.
+                Another class might use a suffixed responder to handle
+                a shortlink route in addition to the regular route for the
+                resource.
+            compile (bool): Optional flag that can be used to compile the
+                routing logic on this call. By default, :class:`.CompiledRouter`
+                delays compilation until the first request is routed. This may
+                introduce a noticeable amount of latency when handling the first
+                request, especially when the application implements a large
+                number of routes. Setting `compile` to ``True`` when the last
+                route is added ensures that the first request will not be
+                delayed in this case (defaults to ``False``).
+
+                Note:
+                    Always setting this flag to ``True`` may slow down the
+                    addition of new routes when hundreds of them are added at
+                    once. It is advisable to only set this flag to ``True`` when
+                    adding the final route.
+        """
+
+        # NOTE(kgriffs): Fields may have whitespace in them, so sub
+        # those before checking the rest of the URI template.
+        if re.search(r'\s', _FIELD_PATTERN.sub('{FIELD}', uri_template)):
+            raise UnacceptableRouteError('URI templates may not include whitespace.')
+
+        path = uri_template.lstrip('/').split('/')
+
+        used_names: Set[str] = set()
+        for segment in path:
+            self._validate_template_segment(segment, used_names)
+
+        def remove_cmp_converter(node: CompiledRouterNode) -> Optional[Tuple[str, str]]:        
+                for field, converter, _ in node.var_converter_map:
+                    node.var_converter_map.remove(converter)
+                    return 1
+
+
+        def remove(nodes: List[CompiledRouterNode], path_index: int = 0) -> None:
+            for node in nodes:
+                segment = path[path_index]
+                if node.matches(segment):
+                    if path_index == len(path):
+                        # NOTE(kgriffs): Override previous node
+                        node.method_map = 0
+                        node.resource = 0
+                        node.uri_template = 0
+                    else:
+                        cpc = remove_cmp_converter(node)
+                        if cpc:
+                            raise UnacceptableRouteError(
+                                _NO_CHILDREN_ERR.format(uri_template, *cpc)
+                            )
+                        remove(node.children, path_index)
+
+                    return
+
+                if node.conflicts_with(segment):
+                    raise UnacceptableRouteError(
+                        'The URI template for this route is inconsistent or conflicts '
+                        "with another route's template. This is usually caused by "
+                        'configuring a field converter differently for the same field '
+                        'in two different routes, or by using different field names '
+                        "at the same level in the path (e.g.,'/parents/{id}' and "
+                        "'/parents/{parent_id}/children')"
+                    )
+
+            nodes.pop(path_index)
+
+        remove(self._roots)
+
+    # NOTE(caselit): keep Request as string otherwise sphinx complains that it resolves
+    # to multiple classes, since the symbol is imported only for type check.
+
     def find(
         self, uri: str, req: Optional['Request'] = None
     ) -> Optional[Tuple[object, MethodDict, Dict[str, Any], Optional[str]]]:
